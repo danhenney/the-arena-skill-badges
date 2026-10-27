@@ -1,0 +1,20 @@
+{
+  "name": "the-arena",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent CLI for The Arena on Arc Testnet. Stakes USDC, submits proofs, and reads SkillBadge reputation.",
+  "bin": {
+    "arena": "./scripts/arena-cli.mjs"
+  },
+  "scripts": {
+    "arena": "node ./scripts/arena-cli.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "viem": "^2.57.12"
+  }
+}
