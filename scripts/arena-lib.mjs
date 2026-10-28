@@ -1,4 +1,4 @@
-import { bytesToHex, encodePacked, hexToBytes, keccak256 } from "viem";
+import { bytesToHex, encodePacked, getAddress, hexToBytes, keccak256 } from "viem";
 
 /** Arc Testnet. The Arena is deployed here. */
 export const CHAIN_ID = 5042002;
@@ -22,6 +22,18 @@ export const ARENA_ADDRESS = "0x5482B09143091C7b337a40bEE8e8732f301aA8D0";
 export const SKILL_BADGE_ADDRESS = "0x2E8E9f1347FDFf801006D46387C69C321d214880";
 export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 export const USDC_DECIMALS = 6;
+export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/**
+ * Arc testnet `eth_getLogs` rejects ranges wider than 9999 blocks.
+ * Chunks stay under that cap. The leaderboard lookback is recent history,
+ * not a full-chain index. SkillBadge has no `totalSupply`.
+ */
+export const LEADERBOARD_LOG_SPAN = 9000n;
+export const DEFAULT_LEADERBOARD_BLOCKS = 200_000n;
+export const MAX_LEADERBOARD_BLOCKS = 2_000_000n;
+export const DEFAULT_LEADERBOARD_LIMIT = 20;
+export const MAX_LEADERBOARD_LIMIT = 100;
 
 export const CHALLENGE_TYPES = {
   0: "POW_RACE",
@@ -228,7 +240,20 @@ export const skillBadgeAbi = [
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [{ type: "string" }],
   },
+  {
+    type: "event",
+    name: "Transfer",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "tokenId", type: "uint256", indexed: true },
+    ],
+  },
 ];
+
+export const skillBadgeTransferEvent = skillBadgeAbi.find(
+  (item) => item.type === "event" && item.name === "Transfer",
+);
 
 export const erc20Abi = [
   {
@@ -412,15 +437,230 @@ export function formatMatch(id, match) {
 }
 
 export function summarizeTokenUri(uri) {
+  const parsed = decodeTokenUriJson(uri);
+  if (!parsed) return uri.length > 180 ? `${uri.slice(0, 180)}…` : uri;
+  const name = parsed.name ?? "SkillBadge";
+  return `${name} ${parsed.json}`;
+}
+
+function decodeTokenUriJson(uri) {
+  if (typeof uri !== "string") return null;
   const marker = "base64,";
   const index = uri.indexOf(marker);
-  if (index === -1) return uri.length > 180 ? `${uri.slice(0, 180)}…` : uri;
+  if (index === -1) return null;
   try {
     const json = Buffer.from(uri.slice(index + marker.length), "base64").toString("utf8");
     const parsed = JSON.parse(json);
-    const name = parsed.name ?? "SkillBadge";
-    return `${name} ${json}`;
+    return { ...parsed, json };
   } catch {
-    return uri.length > 180 ? `${uri.slice(0, 180)}…` : uri;
+    return null;
   }
+}
+
+/** Onchain SkillBadge metadata. `skill` is the SkillTag attribute string, when present. */
+export function parseTokenUri(uri) {
+  const parsed = decodeTokenUriJson(uri);
+  if (!parsed) return null;
+  const attributes = Array.isArray(parsed.attributes) ? parsed.attributes : [];
+  const skillTrait = attributes.find(
+    (attribute) => String(attribute?.trait_type ?? "").toLowerCase() === "skilltag",
+  );
+  const skill = skillTrait?.value;
+  return {
+    name: parsed.name ?? null,
+    skill: skill === undefined || skill === null ? null : String(skill),
+    json: parsed.json,
+  };
+}
+
+/** Map a tokenURI SkillTag onto the bytes32 `countBySkill` expects. */
+export function skillTagFromTrait(value) {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (text.length === 0) return null;
+  if (/^0x[0-9a-fA-F]{64}$/.test(text)) return toBytes32(text);
+  if (/^[0-9a-fA-F]{64}$/.test(text)) return toBytes32(`0x${text}`);
+  try {
+    return toBytes32(text, "skill");
+  } catch {
+    return null;
+  }
+}
+
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Math.min(limit, items.length);
+  async function worker() {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
+}
+
+/**
+ * Win total and per-skill counts for one agent.
+ * `badgesOf` length is the win total. Each distinct SkillTag from `tokenURI`,
+ * plus `skillFlag` when passed, is confirmed with `countBySkill`.
+ */
+export async function readSkillReputation(client, address, skillFlag) {
+  const ids = await client.readContract({
+    address: SKILL_BADGE_ADDRESS,
+    abi: skillBadgeAbi,
+    functionName: "badgesOf",
+    args: [address],
+  });
+  const badges = await mapPool(ids, 8, async (id) => {
+    const uri = await client.readContract({
+      address: SKILL_BADGE_ADDRESS,
+      abi: skillBadgeAbi,
+      functionName: "tokenURI",
+      args: [id],
+    });
+    const parsed = parseTokenUri(uri);
+    return {
+      id,
+      summary: summarizeTokenUri(uri),
+      tag: parsed?.skill == null ? null : skillTagFromTrait(parsed.skill),
+    };
+  });
+
+  const tags = [];
+  const seen = new Set();
+  for (const badge of badges) {
+    if (!badge.tag || seen.has(badge.tag)) continue;
+    seen.add(badge.tag);
+    tags.push(badge.tag);
+  }
+  if (skillFlag) {
+    const forced = toBytes32(skillFlag, "skill");
+    if (!seen.has(forced)) tags.push(forced);
+  }
+
+  const skills = await mapPool(tags, 8, async (tag) => {
+    const count = await client.readContract({
+      address: SKILL_BADGE_ADDRESS,
+      abi: skillBadgeAbi,
+      functionName: "countBySkill",
+      args: [address, tag],
+    });
+    const label = decodeBytes32(tag);
+    return { tag, label: label || null, count };
+  });
+  skills.sort((a, b) => {
+    if (a.count !== b.count) return a.count > b.count ? -1 : 1;
+    const left = a.label || a.tag;
+    const right = b.label || b.tag;
+    if (left === right) return 0;
+    return left < right ? -1 : 1;
+  });
+
+  return { address, wins: ids.length, skills, badges };
+}
+
+export function formatReputation(report) {
+  const lines = [
+    `${report.address}  ${report.wins} SkillBadge${report.wins === 1 ? "" : "s"}`,
+    `wins ${report.wins}`,
+  ];
+  if (report.skills.length === 0) {
+    lines.push("skills none");
+  } else {
+    for (const skill of report.skills) {
+      const label = skill.label || skill.tag;
+      lines.push(`skill ${label} ${skill.tag} countBySkill ${skill.count}`);
+    }
+  }
+  for (const badge of report.badges) {
+    lines.push(`#${badge.id} ${badge.summary}`);
+  }
+  return lines.join("\n");
+}
+
+/** Inclusive log ranges of at most `chunk` blocks, walking back `blocks` from `head`. */
+export function leaderboardRanges(head, blocks, chunk = LEADERBOARD_LOG_SPAN) {
+  const headBlock = BigInt(head);
+  const span = BigInt(blocks);
+  const size = BigInt(chunk);
+  if (size < 1n) throw new Error("chunk must be >= 1");
+  if (span < 1n) throw new Error("blocks must be >= 1");
+  const start = headBlock > span ? headBlock - span : 0n;
+  const ranges = [];
+  let from = start;
+  while (from <= headBlock) {
+    let to = from + size - 1n;
+    if (to > headBlock) to = headBlock;
+    ranges.push({ fromBlock: from, toBlock: to });
+    if (to === headBlock) break;
+    from = to + 1n;
+  }
+  return { start, head: headBlock, ranges };
+}
+
+/** Count mint logs per recipient. Later logs for the same token id are ignored. */
+export function tallyMints(logs) {
+  const seen = new Set();
+  const byAgent = new Map();
+  for (const log of logs) {
+    if (log.to === undefined || log.to === null || log.tokenId === undefined || log.tokenId === null) {
+      continue;
+    }
+    const tokenId = log.tokenId.toString();
+    if (seen.has(tokenId)) continue;
+    seen.add(tokenId);
+    const agent = getAddress(log.to);
+    const row = byAgent.get(agent) ?? { address: agent, windowMints: 0 };
+    row.windowMints += 1;
+    byAgent.set(agent, row);
+  }
+  return [...byAgent.values()];
+}
+
+/** Highest `wins` first, then window mints, then address. `wins` falls back to window mints. */
+export function rankAgents(rows, limit) {
+  const sorted = [...rows].sort((a, b) => {
+    const winsA = a.wins ?? a.windowMints;
+    const winsB = b.wins ?? b.windowMints;
+    if (winsA !== winsB) return winsB > winsA ? 1 : -1;
+    if (a.windowMints !== b.windowMints) return b.windowMints > a.windowMints ? 1 : -1;
+    const left = a.address.toLowerCase();
+    const right = b.address.toLowerCase();
+    if (left === right) return 0;
+    return left < right ? -1 : 1;
+  });
+  if (limit === undefined) return sorted;
+  return sorted.slice(0, limit);
+}
+
+export function formatLeaderboard({
+  chainId,
+  fromBlock,
+  toBlock,
+  blocks,
+  mintCount,
+  discovered,
+  ranked,
+}) {
+  const lines = [
+    "SkillBadge leaderboard",
+    `chain ${chainId}`,
+    `contract ${SKILL_BADGE_ADDRESS}`,
+    `window ${fromBlock}-${toBlock} (${blocks} block lookback)`,
+    `mints ${mintCount}`,
+    `agents ${discovered}`,
+    `shown ${ranked.length}`,
+  ];
+  if (ranked.length === 0) {
+    lines.push("No SkillBadge mints in this window.");
+    return lines.join("\n");
+  }
+  ranked.forEach((row, index) => {
+    const wins = row.wins ?? row.windowMints;
+    lines.push(`rank ${index + 1}  wins ${wins}  window ${row.windowMints}  ${row.address}`);
+  });
+  return lines.join("\n");
 }

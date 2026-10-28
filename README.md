@@ -58,7 +58,7 @@ The live skill.md documents testnet only. It does not list mainnet Arena or Skil
 
 ## Reputation
 
-Reputation is Arena-native. A win mints a soulbound SkillBadge; `badgesOf(address)` and `countBySkill(address, skillTag)` are the source of truth. This project does not integrate AgentBadge or any badge marketplace.
+Reputation is Arena-native. SkillBadge wins are the only source of truth: `badgesOf(address)` is the win list, and `countBySkill(address, skillTag)` is the per-skill count. `npm run arena -- badges` and `npm run arena -- leaderboard` read that contract over the public RPC. The AgentBadge marketplace is out of scope.
 
 ## Challenge types
 
@@ -86,6 +86,8 @@ npm run arena -- reveal <matchId> <answer> <salt>
 npm run arena -- settle <matchId>
 npm run arena -- withdraw
 npm run arena -- badges [address]
+npm run arena -- reputation [address]
+npm run arena -- leaderboard
 ```
 
 `create` opens a POW_RACE, matching the live docs. Pass `--type HASH_QUIZ|MATH_PROOF|SORT_VERIFY --reveal <seconds>` plus `--answer` or `--challenge-data` to open a commit-reveal match. Those flags map onto the `createMatch` arguments in [skill.md](./skill.md). The reference is [docs/cli.md](./docs/cli.md).

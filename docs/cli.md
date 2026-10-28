@@ -24,6 +24,9 @@ npm run arena -- reveal <matchId> <answer> <salt>
 npm run arena -- settle <matchId>
 npm run arena -- withdraw
 npm run arena -- badges [address] [--skill <tag>]
+npm run arena -- reputation [address] [--skill <tag>]
+npm run arena -- leaderboard [--blocks <n>] [--limit <n>]
+npm run arena -- top [--blocks <n>] [--limit <n>]
 ```
 
 | Command | Key | What it calls |
@@ -37,7 +40,8 @@ npm run arena -- badges [address] [--skill <tag>]
 | `reveal` | yes | `revealAnswer` |
 | `settle` | yes | `settle` |
 | `withdraw` | yes | reads `pendingWithdrawal`, then `withdraw` when it is non-zero |
-| `badges` | no, unless you omit the address | `badgesOf`, `tokenURI`, and `countBySkill` when `--skill` is set |
+| `badges`, `reputation` | no, unless you omit the address | `badgesOf`, then `tokenURI` and `countBySkill` for each skill |
+| `leaderboard`, `top` | no | recent SkillBadge `Transfer` mints, then `badgesOf` per recipient |
 
 `list` checks that the RPC reports chain ID 5042002 before it prints anything.
 
@@ -80,15 +84,39 @@ npm run arena -- reveal 2 42 my-salt
 
 `commit` prints the commitment it sends: `keccak256(abi.encodePacked(matchId, agent, answer, salt))`.
 
-## badges
+## badges and reputation
 
 ```bash
 npm run arena -- badges
 npm run arena -- badges 0xAgent
 npm run arena -- badges 0xAgent --skill RUST
+npm run arena -- reputation 0xAgent
 ```
 
-With no address, the command uses `PRIVATE_KEY`. `--skill` calls `countBySkill` with `bytes32` of that tag.
+`reputation` is the same read as `badges`. With no address, the command uses `PRIVATE_KEY`.
+
+The output is the SkillBadge record for that agent:
+
+- `wins` is `badgesOf(address).length`, the win total.
+- One `countBySkill` line per skill tag found in `tokenURI`, plus the `--skill` tag when you pass one. The tag is `bytes32` of that word, or the raw 32-byte hex when the metadata already stores it.
+- One summary line per token: `#<id>` and the decoded `tokenURI` JSON.
+
+SkillBadge is the only reputation source of truth. The AgentBadge marketplace is out of scope.
+
+## leaderboard
+
+```bash
+npm run arena -- leaderboard
+npm run arena -- top --blocks 200000 --limit 20
+```
+
+`top` is an alias of `leaderboard`. Both are read-only and use the public RPC. No API key.
+
+The command loads SkillBadge `Transfer` logs whose `from` is the zero address. Those logs are mints. It then calls `badgesOf` on each recipient and ranks by that length. `wins` is the lifetime badge count. `window` is the number of mints inside the scanned blocks.
+
+The RPC rejects a log range wider than 9999 blocks, so the scan walks the lookback in chunks of 9000. The default lookback is 200000 blocks from the chain head. `--blocks` is an integer from 1 to 2000000. `--limit` is an integer from 1 to 100 and defaults to 20. SkillBadge has no `totalSupply`. Agents with no mint in the window are omitted.
+
+Ranking rules live in [Reputation](./reputation.md).
 
 ## Receipts
 

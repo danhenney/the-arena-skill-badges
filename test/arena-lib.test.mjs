@@ -1,22 +1,35 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { encodePacked, keccak256, toBytes } from "viem";
 import {
   ARENA_ADDRESS,
   CHAIN_ID,
   CHALLENGE_TYPE_ID,
+  DEFAULT_LEADERBOARD_BLOCKS,
   EXPLORER_URL,
   EXPLORER_URL_ALT,
+  LEADERBOARD_LOG_SPAN,
   MATCH_CREATED_TOPIC,
+  MAX_LEADERBOARD_BLOCKS,
   SKILL_BADGE_ADDRESS,
   USDC_ADDRESS,
   answerCommitment,
   challengeDataFromAnswer,
   countLeadingZeroBits,
   decodeBytes32,
+  formatLeaderboard,
+  formatReputation,
   formatUsdc,
+  leaderboardRanges,
   mineNonce,
+  parseTokenUri,
   parseUsdc,
+  rankAgents,
+  readSkillReputation,
+  skillTagFromTrait,
+  tallyMints,
   toBytes32,
 } from "../scripts/arena-lib.mjs";
 
@@ -86,4 +99,166 @@ test("MatchCreated topic matches the deployed event", () => {
   );
   assert.equal(CHALLENGE_TYPE_ID.POW_RACE, 0);
   assert.equal(CHALLENGE_TYPE_ID.SORT_VERIFY, 3);
+});
+
+function tokenUri(metadata) {
+  const json = JSON.stringify(metadata);
+  return `data:application/json;base64,${Buffer.from(json, "utf8").toString("base64")}`;
+}
+
+test("tokenURI SkillTag becomes the countBySkill bytes32", () => {
+  const rust = toBytes32("RUST");
+  const uri = tokenUri({
+    name: "SkillBadge #1",
+    description: "Onchain proof of skill earned in The Arena",
+    attributes: [
+      { trait_type: "SkillTag", value: "RUST" },
+      { trait_type: "MatchId", value: "7" },
+      { trait_type: "Score", value: "12" },
+      { trait_type: "Timestamp", value: "1700000000" },
+    ],
+  });
+  const parsed = parseTokenUri(uri);
+  assert.equal(parsed.name, "SkillBadge #1");
+  assert.equal(parsed.skill, "RUST");
+  assert.equal(skillTagFromTrait(parsed.skill), rust);
+  assert.equal(skillTagFromTrait(rust), rust);
+  assert.equal(skillTagFromTrait(rust.slice(2)), rust);
+  assert.equal(skillTagFromTrait("x".repeat(40)), null);
+  assert.equal(parseTokenUri("not-a-badge"), null);
+});
+
+test("reputation read prints wins and countBySkill per skill", async () => {
+  const agent = "0x0000000000000000000000000000000000000001";
+  const rust = toBytes32("RUST");
+  const quiz = toBytes32("QUIZ");
+  const calls = [];
+  const client = {
+    async readContract({ functionName, args }) {
+      calls.push([functionName, args.map((arg) => arg.toString())]);
+      if (functionName === "badgesOf") return [1n, 2n, 3n];
+      if (functionName === "tokenURI") {
+        const skill = args[0] === 3n ? quiz : "RUST";
+        return tokenUri({
+          name: `SkillBadge #${args[0]}`,
+          attributes: [{ trait_type: "SkillTag", value: skill }],
+        });
+      }
+      if (functionName === "countBySkill") {
+        if (args[1] === rust) return 2n;
+        if (args[1] === quiz) return 1n;
+        return 0n;
+      }
+      throw new Error(functionName);
+    },
+  };
+
+  const report = await readSkillReputation(client, agent, "POW");
+  const text = formatReputation(report);
+  assert.equal(report.wins, 3);
+  assert.deepEqual(
+    report.skills.map((skill) => [skill.label, skill.count]),
+    [
+      ["RUST", 2n],
+      ["QUIZ", 1n],
+      ["POW", 0n],
+    ],
+  );
+  assert.match(text, new RegExp(`^${agent}  3 SkillBadges`));
+  assert.match(text, /^wins 3/m);
+  assert.match(text, new RegExp(`skill RUST ${rust} countBySkill 2`));
+  assert.match(text, new RegExp(`skill QUIZ ${quiz} countBySkill 1`));
+  assert.match(text, /skill POW 0x504f57/);
+  assert.match(text, /#1 SkillBadge #1/);
+  assert.match(text, /#3 SkillBadge #3/);
+  assert.equal(
+    calls.filter((call) => call[0] === "countBySkill").length,
+    3,
+  );
+});
+
+test("leaderboard ranks mint recipients and chunks the log window", () => {
+  const plan = leaderboardRanges(20_000n, 20_000n, 9000n);
+  assert.equal(plan.start, 0n);
+  assert.deepEqual(plan.ranges, [
+    { fromBlock: 0n, toBlock: 8999n },
+    { fromBlock: 9000n, toBlock: 17999n },
+    { fromBlock: 18000n, toBlock: 20000n },
+  ]);
+  assert.ok(plan.ranges.every((range) => range.toBlock - range.fromBlock < 9999n));
+
+  const recent = leaderboardRanges(100_000n, DEFAULT_LEADERBOARD_BLOCKS, LEADERBOARD_LOG_SPAN);
+  assert.equal(recent.start, 0n);
+  assert.equal(LEADERBOARD_LOG_SPAN, 9000n);
+  assert.equal(MAX_LEADERBOARD_BLOCKS, 2_000_000n);
+
+  const low = "0x0000000000000000000000000000000000000002";
+  const high = "0x0000000000000000000000000000000000000003";
+  const tallied = tallyMints([
+    { to: high, tokenId: 1n },
+    { to: low, tokenId: 2n },
+    { to: high, tokenId: 1n },
+    { to: high, tokenId: 4n },
+  ]);
+  const ranked = rankAgents(
+    tallied.map((row) => ({ ...row, wins: row.address === high ? 5 : row.windowMints })),
+    10,
+  );
+  assert.deepEqual(
+    ranked.map((row) => [row.address, row.wins, row.windowMints]),
+    [
+      [high, 5, 2],
+      [low, 1, 1],
+    ],
+  );
+  const text = formatLeaderboard({
+    chainId: CHAIN_ID,
+    fromBlock: recent.start,
+    toBlock: recent.head,
+    blocks: DEFAULT_LEADERBOARD_BLOCKS,
+    mintCount: 3,
+    discovered: ranked.length,
+    ranked,
+  });
+  assert.match(text, new RegExp(`contract ${SKILL_BADGE_ADDRESS}`));
+  assert.match(text, /rank 1 {2}wins 5 {2}window 2/);
+  assert.match(text, /mints 3/);
+
+  const empty = formatLeaderboard({
+    chainId: CHAIN_ID,
+    fromBlock: 1n,
+    toBlock: 2n,
+    blocks: 1n,
+    mintCount: 0,
+    discovered: 0,
+    ranked: [],
+  });
+  assert.match(empty, /No SkillBadge mints in this window/);
+});
+
+test("docs treat SkillBadge wins as the only reputation source", () => {
+  const skill = readFileSync(new URL("../skill.md", import.meta.url), "utf8");
+  const reputation = readFileSync(new URL("../docs/reputation.md", import.meta.url), "utf8");
+  const cli = readFileSync(new URL("../docs/cli.md", import.meta.url), "utf8");
+  for (const text of [skill, reputation]) {
+    assert.match(text, /source of truth/i);
+    assert.match(text, /AgentBadge/);
+    assert.match(text, /leaderboard/);
+    assert.match(text, /countBySkill/);
+  }
+  assert.match(cli, /leaderboard/);
+  assert.match(cli, /reputation/);
+  assert.match(reputation, /out of scope/i);
+});
+
+test("CLI help lists badges, reputation, and leaderboard", () => {
+  const result = spawnSync(process.execPath, ["scripts/arena-cli.mjs", "help"], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /badges \[address\] \[--skill <tag>\]/);
+  assert.match(result.stdout, /reputation \[address\] \[--skill <tag>\]/);
+  assert.match(result.stdout, /leaderboard \[--blocks <n>\] \[--limit <n>\]/);
+  assert.match(result.stdout, /top \[--blocks <n>\] \[--limit <n>\]/);
+  assert.match(result.stdout, /AgentBadge is out of scope/);
 });
