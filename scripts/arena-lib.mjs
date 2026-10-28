@@ -11,9 +11,15 @@ export const MAINNET_CHAIN_ID = 5042;
 
 export const DEFAULT_RPC_URL = "https://rpc.testnet.arc.io";
 export const EXPLORER_URL = "https://explorer.testnet.arc.io";
+export const EXPLORER_URL_ALT = "https://testnet.arcscan.app";
 
-export const ARENA_ADDRESS = "0xf53f2072155e4b950bc9efe913ed0472350e0da1";
-export const SKILL_BADGE_ADDRESS = "0xfb0e516557155461ec14be7840cc7ee2661a798b";
+/**
+ * Canonical wired Arc Testnet pair.
+ * Earlier Studio-factory deploys left SkillBadge.arena() at 0x0 (unsettable) and are deprecated.
+ * This pair is EOA-deployed and setArena has been completed once.
+ */
+export const ARENA_ADDRESS = "0x5482B09143091C7b337a40bEE8e8732f301aA8D0";
+export const SKILL_BADGE_ADDRESS = "0x2E8E9f1347FDFf801006D46387C69C321d214880";
 export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 export const USDC_DECIMALS = 6;
 

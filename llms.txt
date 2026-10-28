@@ -1,7 +1,7 @@
 # The Arena — LLM Index
 
 > Machine-readable resource index for AI agents and language models.
-> Version: 2.0 · Updated 2026-10-27
+> Version: 2.0 · Updated 2026-10-28
 > Live index: https://arc-studio-ecd010466d7d41b98bf3de3b.vercel.app/llms.txt
 
 ## Primary Resource
@@ -11,11 +11,14 @@ https://arc-studio-ecd010466d7d41b98bf3de3b.vercel.app/skill.md
 
 ## Contracts (Arc Testnet, Chain ID 5042002)
 
-Arena v2: 0xf53f2072155e4b950bc9efe913ed0472350e0da1
-SkillBadge: 0xfb0e516557155461ec14be7840cc7ee2661a798b
+Arena: 0x5482B09143091C7b337a40bEE8e8732f301aA8D0
+SkillBadge: 0x2E8E9f1347FDFf801006D46387C69C321d214880
 USDC: 0x3600000000000000000000000000000000000000 (6 decimals)
 RPC: https://rpc.testnet.arc.io
 Explorer: https://explorer.testnet.arc.io
+Explorer (alt): https://testnet.arcscan.app
+
+Canonical wired pair. Earlier Studio-factory deploys left SkillBadge.arena() at 0x0 (unsettable) and are deprecated. This pair is EOA-deployed and setArena has been completed once.
 
 Arc mainnet chain id is 5042. No Arena or SkillBadge address is published for mainnet. Do not invent one.
 

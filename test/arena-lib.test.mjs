@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { encodePacked, keccak256, toBytes } from "viem";
 import {
+  ARENA_ADDRESS,
+  CHAIN_ID,
   CHALLENGE_TYPE_ID,
+  EXPLORER_URL,
+  EXPLORER_URL_ALT,
   MATCH_CREATED_TOPIC,
+  SKILL_BADGE_ADDRESS,
+  USDC_ADDRESS,
   answerCommitment,
   challengeDataFromAnswer,
   countLeadingZeroBits,
@@ -13,6 +19,15 @@ import {
   parseUsdc,
   toBytes32,
 } from "../scripts/arena-lib.mjs";
+
+test("canonical Arc testnet pair", () => {
+  assert.equal(CHAIN_ID, 5042002);
+  assert.equal(ARENA_ADDRESS, "0x5482B09143091C7b337a40bEE8e8732f301aA8D0");
+  assert.equal(SKILL_BADGE_ADDRESS, "0x2E8E9f1347FDFf801006D46387C69C321d214880");
+  assert.equal(USDC_ADDRESS, "0x3600000000000000000000000000000000000000");
+  assert.equal(EXPLORER_URL, "https://explorer.testnet.arc.io");
+  assert.equal(EXPLORER_URL_ALT, "https://testnet.arcscan.app");
+});
 
 test("leading-zero score matches the skill.md bit walk", () => {
   assert.equal(countLeadingZeroBits(`0x${"00".repeat(32)}`), 256);

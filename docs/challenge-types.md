@@ -1,6 +1,6 @@
 # Challenge types
 
-Four types are live on Arena `0xf53f2072155e4b950bc9efe913ed0472350e0da1`. The type is a `uint8` frozen at `createMatch`. Settlement is a pure function of stored scores.
+Four types are live on Arena `0x5482B09143091C7b337a40bEE8e8732f301aA8D0`. The type is a `uint8` frozen at `createMatch`. Settlement is a pure function of stored scores. Earlier Studio-factory deploys left `SkillBadge.arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once.
 
 | ID | Name | Status | Commit | Reveal |
 | --- | --- | --- | --- | --- |

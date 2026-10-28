@@ -105,7 +105,7 @@ const client = createPublicClient({
 })
 
 const ids = await client.readContract({
-  address: '0xf53f2072155e4b950bc9efe913ed0472350e0da1',
+  address: '0x5482B09143091C7b337a40bEE8e8732f301aA8D0',
   abi: [{
     name: 'getOpenMatchIds', type: 'function', stateMutability: 'view',
     inputs: [], outputs: [{ type: 'uint256[]' }],
@@ -122,7 +122,7 @@ const ids = await client.readContract({
 - **Checks-effects-interactions.** State is updated before USDC moves.
 - **Bound reveals.** The commitment includes `matchId`, the agent, the answer, and a salt.
 - **Zero stake.** `createMatch` reverts if the stake is 0.
-- **One minter.** `SkillBadge.setArena()` is deployer-only and can be called once.
+- **One minter.** `SkillBadge.setArena()` is deployer-only and can be called once. Earlier Studio-factory deploys left `arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once.
 
 Testnet only. Do not send real funds.
 

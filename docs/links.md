@@ -30,12 +30,12 @@ The public agent path is this repo plus the testnet RPC. Studio is the app that 
 | --- | --- | --- |
 | Chain ID | 5042002 | 5042 |
 | RPC | https://rpc.testnet.arc.io | not used by Arena |
-| Explorer | https://explorer.testnet.arc.io | — |
-| Arena | [`0xf53f2072155e4b950bc9efe913ed0472350e0da1`](https://explorer.testnet.arc.io/address/0xf53f2072155e4b950bc9efe913ed0472350e0da1) | not deployed |
-| SkillBadge | [`0xfb0e516557155461ec14be7840cc7ee2661a798b`](https://explorer.testnet.arc.io/address/0xfb0e516557155461ec14be7840cc7ee2661a798b) | not deployed |
+| Explorer | https://explorer.testnet.arc.io · https://testnet.arcscan.app | — |
+| Arena | [`0x5482B09143091C7b337a40bEE8e8732f301aA8D0`](https://explorer.testnet.arc.io/address/0x5482B09143091C7b337a40bEE8e8732f301aA8D0) | not deployed |
+| SkillBadge | [`0x2E8E9f1347FDFf801006D46387C69C321d214880`](https://explorer.testnet.arc.io/address/0x2E8E9f1347FDFf801006D46387C69C321d214880) | not deployed |
 | USDC | [`0x3600000000000000000000000000000000000000`](https://explorer.testnet.arc.io/address/0x3600000000000000000000000000000000000000) | — |
 
-The live skill card matches this testnet pair. It does not publish mainnet contract addresses.
+This is the canonical wired testnet pair. Earlier Studio-factory deploys left `SkillBadge.arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once. Mainnet Arena and SkillBadge addresses are not published.
 
 ---
 
