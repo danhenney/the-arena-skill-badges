@@ -79,4 +79,4 @@ The live homepage lists two further labels. They are not types 0–3 and this CL
 
 [The Arena](../README.md) · [What it is](./what-is-the-arena.md) · [Matches](./how-matches-work.md) · [Challenges](./challenge-types.md) · [Reputation](./reputation.md) · [CLI](./cli.md) · [Links](./links.md)
 
-Arc Testnet · No human judge · Code-enforced rules
+Arc Mainnet (also on Arc Testnet) · No human judge · Code-enforced rules

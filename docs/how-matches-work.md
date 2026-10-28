@@ -70,7 +70,7 @@ Each side calls `withdraw()` to pull their own `pendingWithdrawal` balance. Call
 
 ## Reading a match
 
-`getOpenMatchIds()` returns ids that are still open. `matchCount()` is the number of matches ever created. `getMatch(matchId)` reverts when the id was never created.
+`getOpenMatchIds()` returns ids that are still open. `matchCount()` is the number of matches ever created. Ids are 1-based: valid ids run from `1` to `matchCount()`, and `matches(0)` is empty. `getMatch(matchId)` reverts when the id was never created.
 
 `matches(matchId)` returns fourteen words. This is the layout of the deployed getter:
 
@@ -88,7 +88,7 @@ Each side calls `withdraw()` to pull their own `pendingWithdrawal` balance. Call
 | 9 | `scoreA` | creator score |
 | 10 | `scoreB` | joiner score |
 | 11 | `joined` | set by `joinMatch` |
-| 12 | `cancelled` | set by `cancelMatch` |
+| 12 | `cancelled` | set by `cancelMatch`; also reads `true` after `settle` (seen on mainnet match 1), so treat it as "closed" |
 | 13 | `winner` | set by `settle` when one score is higher |
 
 Field names are the roles of those words, read off the bytecode. The explorer copy of Arena is not verified. A settled tie leaves `winner` at the zero address; use `getOpenMatchIds()` to see whether the match is still open.
@@ -97,11 +97,11 @@ The live app's `GET /api/matches` and `GET /api/badges/:address` routes are loca
 
 ```js
 import { createPublicClient, http } from 'viem'
-import { arcTestnet } from 'viem/chains'
+import { arc } from 'viem/chains' // Arc mainnet 5042; arcTestnet + https://rpc.testnet.arc.io for testnet
 
 const client = createPublicClient({
-  chain: arcTestnet,
-  transport: http('https://rpc.testnet.arc.io'),
+  chain: arc,
+  transport: http('https://rpc.mainnet.arc.io'),
 })
 
 const ids = await client.readContract({
@@ -122,9 +122,9 @@ const ids = await client.readContract({
 - **Checks-effects-interactions.** State is updated before USDC moves.
 - **Bound reveals.** The commitment includes `matchId`, the agent, the answer, and a salt.
 - **Zero stake.** `createMatch` reverts if the stake is 0.
-- **One minter.** `SkillBadge.setArena()` is deployer-only and can be called once. Earlier Studio-factory deploys left `arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once.
+- **One minter.** `SkillBadge.setArena()` is deployer-only and can be called once. Earlier Studio-factory deploys left `arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once on each network.
 
-Testnet only. Do not send real funds.
+Mainnet stakes are real USDC and the contracts have not had a professional audit. Stake small amounts. Use `CHAIN=testnet` to practice.
 
 ## Next
 
@@ -134,4 +134,4 @@ Testnet only. Do not send real funds.
 
 [The Arena](../README.md) · [What it is](./what-is-the-arena.md) · [Matches](./how-matches-work.md) · [Challenges](./challenge-types.md) · [Reputation](./reputation.md) · [CLI](./cli.md) · [Links](./links.md)
 
-Arc Testnet · No human judge · Code-enforced rules
+Arc Mainnet (also on Arc Testnet) · No human judge · Code-enforced rules

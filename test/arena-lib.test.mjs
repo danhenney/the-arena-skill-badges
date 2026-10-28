@@ -10,6 +10,12 @@ import {
   DEFAULT_LEADERBOARD_BLOCKS,
   EXPLORER_URL,
   EXPLORER_URL_ALT,
+  MAINNET_CHAIN_ID,
+  TESTNET_CHAIN_ID,
+  TESTNET_EXPLORER_URL,
+  checkChainId,
+  matchExists,
+  resolveNetwork,
   LEADERBOARD_LOG_SPAN,
   MATCH_CREATED_TOPIC,
   MAX_LEADERBOARD_BLOCKS,
@@ -33,13 +39,39 @@ import {
   toBytes32,
 } from "../scripts/arena-lib.mjs";
 
-test("canonical Arc testnet pair", () => {
-  assert.equal(CHAIN_ID, 5042002);
+test("canonical Arc pair, mainnet primary", () => {
+  assert.equal(CHAIN_ID, 5042);
+  assert.equal(MAINNET_CHAIN_ID, 5042);
+  assert.equal(TESTNET_CHAIN_ID, 5042002);
   assert.equal(ARENA_ADDRESS, "0x5482B09143091C7b337a40bEE8e8732f301aA8D0");
   assert.equal(SKILL_BADGE_ADDRESS, "0x2E8E9f1347FDFf801006D46387C69C321d214880");
   assert.equal(USDC_ADDRESS, "0x3600000000000000000000000000000000000000");
-  assert.equal(EXPLORER_URL, "https://explorer.testnet.arc.io");
+  assert.equal(EXPLORER_URL, "https://explorer.arc.io");
+  assert.equal(TESTNET_EXPLORER_URL, "https://explorer.testnet.arc.io");
   assert.equal(EXPLORER_URL_ALT, "https://testnet.arcscan.app");
+});
+
+test("network selection keeps mainnet default and testnet mode", () => {
+  assert.equal(resolveNetwork({}).chainId, 5042);
+  assert.equal(resolveNetwork({}).rpcUrl, "https://rpc.mainnet.arc.io");
+  assert.equal(resolveNetwork({ CHAIN: "testnet" }).chainId, 5042002);
+  assert.equal(resolveNetwork({ CHAIN: "5042002" }).rpcUrl, "https://rpc.testnet.arc.io");
+  assert.equal(resolveNetwork({ CHAIN: "5042" }).chainId, 5042);
+  assert.equal(resolveNetwork({ RPC_URL: "https://rpc.testnet.arc.io" }).chainId, 5042002);
+  assert.equal(resolveNetwork({ RPC_URL: "https://rpc.mainnet.arc.io" }).chainId, 5042);
+  const custom = resolveNetwork({ CHAIN: "mainnet", RPC_URL: "https://rpc.drpc.mainnet.arc.io" });
+  assert.equal(custom.rpcUrl, "https://rpc.drpc.mainnet.arc.io");
+  assert.throws(() => resolveNetwork({ CHAIN: "sepolia" }), /Unknown CHAIN/);
+  assert.doesNotThrow(() => checkChainId(5042, resolveNetwork({})));
+  assert.doesNotThrow(() => checkChainId(5042002, resolveNetwork({ CHAIN: "testnet" })));
+  assert.throws(() => checkChainId(5042002, resolveNetwork({})), /set CHAIN=testnet/);
+});
+
+test("match ids are 1-based", () => {
+  assert.equal(matchExists(0n, 1n), false);
+  assert.equal(matchExists(1n, 1n), true);
+  assert.equal(matchExists(2n, 1n), false);
+  assert.equal(matchExists(1n, 0n), false);
 });
 
 test("leading-zero score matches the skill.md bit walk", () => {
