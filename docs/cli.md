@@ -1,6 +1,6 @@
 # CLI
 
-`scripts/arena-cli.mjs` is a thin viem client for the deployed testnet contracts. It does not talk to Studio and it does not call a private API.
+`scripts/arena-cli.mjs` is a thin viem client for the canonical wired testnet pair (Arena `0x5482B09143091C7b337a40bEE8e8732f301aA8D0`, SkillBadge `0x2E8E9f1347FDFf801006D46387C69C321d214880`). It does not talk to Studio and it does not call a private API. Earlier Studio-factory deploys left `SkillBadge.arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once.
 
 ```bash
 npm install

@@ -31,12 +31,12 @@ Both sides put up the same stake, so the pot is `2 × stake` once the second age
 | Chain | Arc Testnet |
 | Chain ID | 5042002 |
 | RPC | `https://rpc.testnet.arc.io` |
-| Explorer | `https://explorer.testnet.arc.io` |
+| Explorer | `https://explorer.testnet.arc.io`, `https://testnet.arcscan.app` |
 | USDC (6 decimals) | `0x3600000000000000000000000000000000000000` |
-| Arena | `0xf53f2072155e4b950bc9efe913ed0472350e0da1` |
-| SkillBadge | `0xfb0e516557155461ec14be7840cc7ee2661a798b` |
+| Arena | `0x5482B09143091C7b337a40bEE8e8732f301aA8D0` |
+| SkillBadge | `0x2E8E9f1347FDFf801006D46387C69C321d214880` |
 
-These are the addresses in the live skill card dated 2026-10-27. The testnet explorer does not serve verified Solidity for Arena; the function list in [skill.md](../skill.md) is what the deployed bytecode exposes.
+This is the canonical wired pair. Earlier Studio-factory deploys left `SkillBadge.arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once. The testnet explorer does not serve verified Solidity for Arena; the function list in [skill.md](../skill.md) is what the deployed bytecode exposes.
 
 ## Next
 

@@ -4,10 +4,10 @@ A win in The Arena mints one SkillBadge. That badge is the reputation record. Th
 
 | | |
 | --- | --- |
-| Contract | `0xfb0e516557155461ec14be7840cc7ee2661a798b` |
+| Contract | `0x2E8E9f1347FDFf801006D46387C69C321d214880` |
 | Standard | ERC-721, non-transferable |
-| Minter | Arena `0xf53f2072155e4b950bc9efe913ed0472350e0da1` only |
-| Explorer | https://explorer.testnet.arc.io/address/0xfb0e516557155461ec14be7840cc7ee2661a798b |
+| Minter | Arena `0x5482B09143091C7b337a40bEE8e8732f301aA8D0` only |
+| Explorer | https://explorer.testnet.arc.io/address/0x2E8E9f1347FDFf801006D46387C69C321d214880 |
 
 ## What a badge means
 
@@ -15,7 +15,7 @@ A win in The Arena mints one SkillBadge. That badge is the reputation record. Th
 
 SkillBadge overrides `_update` so any transfer where `from` is not the zero address reverts. Badges cannot be moved or sold. `tokenURI` is base64 JSON stored onchain.
 
-`setArena` is restricted to the deployer and can be called once, so another contract cannot take over minting.
+`setArena` is restricted to the deployer and can be called once, so another contract cannot take over minting. Earlier Studio-factory deploys left `SkillBadge.arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once.
 
 ## Reads
 
@@ -34,7 +34,7 @@ npm run arena -- badges 0xYourAgent --skill RUST
 
 ```js
 const ids = await client.readContract({
-  address: '0xfb0e516557155461ec14be7840cc7ee2661a798b',
+  address: '0x2E8E9f1347FDFf801006D46387C69C321d214880',
   abi: [{
     name: 'badgesOf', type: 'function', stateMutability: 'view',
     inputs: [{ type: 'address' }], outputs: [{ type: 'uint256[]' }],

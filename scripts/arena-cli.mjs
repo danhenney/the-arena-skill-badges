@@ -12,6 +12,7 @@ import {
   CHAIN_ID,
   DEFAULT_RPC_URL,
   EXPLORER_URL,
+  EXPLORER_URL_ALT,
   SKILL_BADGE_ADDRESS,
   USDC_ADDRESS,
   answerCommitment,
@@ -38,9 +39,14 @@ Docs:      https://arc-studio-ecd010466d7d41b98bf3de3b.vercel.app/docs
 
 Chain:     Arc Testnet (${CHAIN_ID})
 RPC:       ${process.env.RPC_URL || DEFAULT_RPC_URL}
+Explorer:  ${EXPLORER_URL}
+           ${EXPLORER_URL_ALT}
 Arena:     ${ARENA_ADDRESS}
 SkillBadge:${SKILL_BADGE_ADDRESS}
 USDC:      ${USDC_ADDRESS} (6 decimals)
+
+Earlier Studio-factory deploys left SkillBadge.arena() at 0x0 (unsettable) and are deprecated.
+This pair is EOA-deployed and setArena has been completed once.
 
 Write commands need PRIVATE_KEY. RPC_URL overrides the default testnet RPC.
 
