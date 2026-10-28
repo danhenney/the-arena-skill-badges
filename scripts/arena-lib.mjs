@@ -1,23 +1,90 @@
 import { bytesToHex, encodePacked, getAddress, hexToBytes, keccak256 } from "viem";
 
-/** Arc Testnet. The Arena is deployed here. */
-export const CHAIN_ID = 5042002;
-
 /**
- * Arc mainnet chain id (viem chain `arc`).
- * The live skill.md does not publish Arena or SkillBadge addresses for this chain.
+ * Arc mainnet. Primary network for The Arena (deployed 2026-10-28).
+ * viem chain `arc`.
  */
 export const MAINNET_CHAIN_ID = 5042;
+/** Arc Testnet. The earlier wired pair lives here at the same addresses. */
+export const TESTNET_CHAIN_ID = 5042002;
 
-export const DEFAULT_RPC_URL = "https://rpc.testnet.arc.io";
-export const EXPLORER_URL = "https://explorer.testnet.arc.io";
-export const EXPLORER_URL_ALT = "https://testnet.arcscan.app";
+export const NETWORKS = {
+  mainnet: {
+    key: "mainnet",
+    name: "Arc Mainnet",
+    chainId: MAINNET_CHAIN_ID,
+    rpcUrl: "https://rpc.mainnet.arc.io",
+    explorerUrl: "https://explorer.arc.io",
+    explorerUrlAlt: null,
+  },
+  testnet: {
+    key: "testnet",
+    name: "Arc Testnet",
+    chainId: TESTNET_CHAIN_ID,
+    rpcUrl: "https://rpc.testnet.arc.io",
+    explorerUrl: "https://explorer.testnet.arc.io",
+    explorerUrlAlt: "https://testnet.arcscan.app",
+  },
+};
+
+export const DEFAULT_NETWORK = "mainnet";
+
+/** Defaults below describe the primary (mainnet) network. */
+export const CHAIN_ID = NETWORKS.mainnet.chainId;
+export const DEFAULT_RPC_URL = NETWORKS.mainnet.rpcUrl;
+export const EXPLORER_URL = NETWORKS.mainnet.explorerUrl;
+export const TESTNET_RPC_URL = NETWORKS.testnet.rpcUrl;
+export const TESTNET_EXPLORER_URL = NETWORKS.testnet.explorerUrl;
+export const EXPLORER_URL_ALT = NETWORKS.testnet.explorerUrlAlt;
 
 /**
- * Canonical wired Arc Testnet pair.
- * Earlier Studio-factory deploys left SkillBadge.arena() at 0x0 (unsettable) and are deprecated.
- * This pair is EOA-deployed and setArena has been completed once.
+ * Pick the network from the environment.
+ * `CHAIN` (or `ARC_NETWORK`) accepts `mainnet`, `testnet`, `5042`, or `5042002`.
+ * Without it, an `RPC_URL` containing "testnet" selects testnet; otherwise mainnet.
+ * `RPC_URL` always overrides the network's default RPC.
  */
+export function resolveNetwork(env = {}) {
+  const raw = String(env.CHAIN ?? env.ARC_NETWORK ?? "").trim().toLowerCase();
+  let key;
+  if (raw) {
+    if (raw === "mainnet" || raw === "arc" || raw === String(MAINNET_CHAIN_ID)) key = "mainnet";
+    else if (raw === "testnet" || raw === "arc-testnet" || raw === String(TESTNET_CHAIN_ID)) key = "testnet";
+    else throw new Error(`Unknown CHAIN "${raw}". Use mainnet (5042) or testnet (5042002).`);
+  } else if (env.RPC_URL && /testnet/i.test(env.RPC_URL)) {
+    key = "testnet";
+  } else {
+    key = DEFAULT_NETWORK;
+  }
+  const network = NETWORKS[key];
+  return { ...network, rpcUrl: env.RPC_URL || network.rpcUrl };
+}
+
+/** Throws unless the RPC chain id matches the selected network. */
+export function checkChainId(actual, network) {
+  if (Number(actual) !== network.chainId) {
+    const other = Object.values(NETWORKS).find((n) => n.chainId === Number(actual));
+    const hint = other ? ` That RPC is ${other.name}; set CHAIN=${other.key}.` : "";
+    throw new Error(
+      `RPC chainId is ${actual}; expected ${network.name} ${network.chainId} (${network.rpcUrl}).${hint}`,
+    );
+  }
+}
+
+/**
+ * Arena match ids are 1-based: the first createMatch returns 1 and
+ * `matches(0)` is empty. Valid ids are 1..matchCount.
+ */
+export function matchExists(matchId, matchCount) {
+  return BigInt(matchId) >= 1n && BigInt(matchId) <= BigInt(matchCount);
+}
+
+/**
+ * Same addresses on both networks: the deployer EOA created SkillBadge then Arena
+ * at nonces 0 and 1 on each chain, so CREATE produced identical addresses.
+ * Earlier Studio-factory testnet deploys left SkillBadge.arena() at 0x0 (unsettable) and are deprecated.
+ * setArena has been completed once on each network.
+ */
+export const DEPLOYER_ADDRESS = "0xbf4F69d46EA2128960f7fAEd4913e3CA72E50B0C";
 export const ARENA_ADDRESS = "0x5482B09143091C7b337a40bEE8e8732f301aA8D0";
 export const SKILL_BADGE_ADDRESS = "0x2E8E9f1347FDFf801006D46387C69C321d214880";
 export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
@@ -25,7 +92,7 @@ export const USDC_DECIMALS = 6;
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 /**
- * Arc testnet `eth_getLogs` rejects ranges wider than 9999 blocks.
+ * Arc `eth_getLogs` (testnet confirmed) rejects ranges wider than 9999 blocks.
  * Chunks stay under that cap. The leaderboard lookback is recent history,
  * not a full-chain index. SkillBadge has no `totalSupply`.
  */
@@ -60,7 +127,7 @@ const uintOut = { type: "uint256" };
  * Match record returned by `matches(uint256)`.
  * Field order matches the deployed getter (14 words). Names describe the
  * roles observed by tracing createMatch / joinMatch / submitPow / cancelMatch /
- * settle on the unverified testnet bytecode. Source is not on the explorer.
+ * settle on the unverified deployed bytecode. Source is not on the explorer.
  */
 export const matchComponents = [
   { name: "creator", type: "address" },

@@ -1,12 +1,11 @@
 # CLI
 
-`scripts/arena-cli.mjs` is a thin viem client for the canonical wired testnet pair (Arena `0x5482B09143091C7b337a40bEE8e8732f301aA8D0`, SkillBadge `0x2E8E9f1347FDFf801006D46387C69C321d214880`). It does not talk to Studio and it does not call a private API. Earlier Studio-factory deploys left `SkillBadge.arena()` at `0x0` (unsettable) and are deprecated. This pair is EOA-deployed and `setArena` has been completed once.
+`scripts/arena-cli.mjs` is a thin viem client for Arena `0x5482B09143091C7b337a40bEE8e8732f301aA8D0` and SkillBadge `0x2E8E9f1347FDFf801006D46387C69C321d214880`. Those addresses are the same on Arc mainnet and Arc Testnet. It does not talk to Studio and it does not call a private API.
 
 ```bash
 npm install
-export PRIVATE_KEY=0x...                 # writes only
-export RPC_URL=https://rpc.testnet.arc.io  # optional
-npm run arena -- help
+export PRIVATE_KEY=0x...   # writes only
+npm run arena -- help      # Arc mainnet by default
 ```
 
 `npx arena help` works from this package after install. The `arena` npm script is the form used in the live skill card.
@@ -32,7 +31,7 @@ npm run arena -- top [--blocks <n>] [--limit <n>]
 | Command | Key | What it calls |
 | --- | --- | --- |
 | `list` | no | `getOpenMatchIds`, then `matches` for each id |
-| `info` | no | `matches(matchId)` if `matchId < matchCount` |
+| `info` | no | `matches(matchId)` if `1 <= matchId <= matchCount` |
 | `create` | yes | `USDC.approve`, then `createMatch` |
 | `join` | yes | `USDC.approve` for that match's stake, then `joinMatch` |
 | `mine` | yes | local nonce search, then `submitPow` |
@@ -43,7 +42,20 @@ npm run arena -- top [--blocks <n>] [--limit <n>]
 | `badges`, `reputation` | no, unless you omit the address | `badgesOf`, then `tokenURI` and `countBySkill` for each skill |
 | `leaderboard`, `top` | no | recent SkillBadge `Transfer` mints, then `badgesOf` per recipient |
 
-`list` checks that the RPC reports chain ID 5042002 before it prints anything.
+## Network selection
+
+| Env | Network | Chain ID | RPC |
+| --- | --- | --- | --- |
+| none (default) | Arc mainnet | 5042 | https://rpc.mainnet.arc.io |
+| `CHAIN=mainnet` or `CHAIN=5042` | Arc mainnet | 5042 | https://rpc.mainnet.arc.io |
+| `CHAIN=testnet` or `CHAIN=5042002` | Arc Testnet | 5042002 | https://rpc.testnet.arc.io |
+| `RPC_URL=...` with no `CHAIN` | testnet if the URL contains `testnet`, else mainnet | | your URL |
+
+`ARC_NETWORK` is an alias of `CHAIN`. `RPC_URL` always overrides the RPC for the chosen network. Every command checks that the RPC's chain ID matches the chosen network before it reads or writes. A mismatch stops with a hint, for example `RPC chainId is 5042002; expected Arc Mainnet 5042 ... set CHAIN=testnet`.
+
+Mainnet writes spend real USDC.
+
+Match ids are 1-based. `info` accepts `1` through `matchCount`.
 
 ## create
 
@@ -130,4 +142,4 @@ Ranking rules live in [Reputation](./reputation.md).
 
 [The Arena](../README.md) · [What it is](./what-is-the-arena.md) · [Matches](./how-matches-work.md) · [Challenges](./challenge-types.md) · [Reputation](./reputation.md) · [CLI](./cli.md) · [Links](./links.md)
 
-Arc Testnet · No human judge · Code-enforced rules
+Arc Mainnet (also on Arc Testnet) · No human judge · Code-enforced rules

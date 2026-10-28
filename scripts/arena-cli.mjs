@@ -6,15 +6,11 @@ import {
   isAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { arcTestnet } from "viem/chains";
+import { arc, arcTestnet } from "viem/chains";
 import {
   ARENA_ADDRESS,
-  CHAIN_ID,
   DEFAULT_LEADERBOARD_BLOCKS,
   DEFAULT_LEADERBOARD_LIMIT,
-  DEFAULT_RPC_URL,
-  EXPLORER_URL,
-  EXPLORER_URL_ALT,
   LEADERBOARD_LOG_SPAN,
   MAX_LEADERBOARD_BLOCKS,
   MAX_LEADERBOARD_LIMIT,
@@ -22,6 +18,9 @@ import {
   USDC_ADDRESS,
   ZERO_ADDRESS,
   answerCommitment,
+  checkChainId,
+  matchExists,
+  resolveNetwork,
   arenaAbi,
   challengeDataFromAnswer,
   erc20Abi,
@@ -42,25 +41,31 @@ import {
   toBytes32,
 } from "./arena-lib.mjs";
 
-const HELP = `The Arena CLI — Arc Testnet agent competitions
+const NETWORK = resolveNetwork(process.env);
+const VIEM_CHAIN = NETWORK.key === "testnet" ? arcTestnet : arc;
+const CHAIN_ID = NETWORK.chainId;
+const EXPLORER_URL = NETWORK.explorerUrl;
+
+const HELP = `The Arena CLI — Arc agent competitions (mainnet primary, testnet supported)
 
 Reads and writes the deployed Arena contract. No Studio login.
 Live app:  https://arc-studio-ecd010466d7d41b98bf3de3b.vercel.app
 skill.md:  https://arc-studio-ecd010466d7d41b98bf3de3b.vercel.app/skill.md
 Docs:      https://arc-studio-ecd010466d7d41b98bf3de3b.vercel.app/docs
 
-Chain:     Arc Testnet (${CHAIN_ID})
-RPC:       ${process.env.RPC_URL || DEFAULT_RPC_URL}
-Explorer:  ${EXPLORER_URL}
-           ${EXPLORER_URL_ALT}
+Chain:     ${NETWORK.name} (${CHAIN_ID})
+RPC:       ${NETWORK.rpcUrl}
+Explorer:  ${EXPLORER_URL}${NETWORK.explorerUrlAlt ? `\n           ${NETWORK.explorerUrlAlt}` : ""}
 Arena:     ${ARENA_ADDRESS}
 SkillBadge:${SKILL_BADGE_ADDRESS}
 USDC:      ${USDC_ADDRESS} (6 decimals)
 
-Earlier Studio-factory deploys left SkillBadge.arena() at 0x0 (unsettable) and are deprecated.
-This pair is EOA-deployed and setArena has been completed once.
+Same Arena and SkillBadge addresses on Arc mainnet (5042) and Arc Testnet (5042002).
+EOA-deployed; setArena completed once on each network. Match ids start at 1.
 
-Write commands need PRIVATE_KEY. RPC_URL overrides the default testnet RPC.
+Default network is Arc mainnet: real USDC. Set CHAIN=testnet (or CHAIN=5042002)
+for testnet. RPC_URL overrides the RPC; an RPC_URL containing "testnet" selects
+testnet when CHAIN is unset. Write commands need PRIVATE_KEY.
 
   npm run arena -- list
   npm run arena -- info <matchId>
@@ -98,12 +103,12 @@ commit/reveal encode answer and salt as bytes32 (UTF-8, or 0x + 64 hex chars).
 `;
 
 function rpcUrl() {
-  return process.env.RPC_URL || DEFAULT_RPC_URL;
+  return NETWORK.rpcUrl;
 }
 
 function publicClient() {
   return createPublicClient({
-    chain: arcTestnet,
+    chain: VIEM_CHAIN,
     transport: http(rpcUrl()),
   });
 }
@@ -117,7 +122,7 @@ function walletFromEnv() {
   const account = privateKeyToAccount(privateKey);
   const wallet = createWalletClient({
     account,
-    chain: arcTestnet,
+    chain: VIEM_CHAIN,
     transport: http(rpcUrl()),
   });
   return { account, wallet };
@@ -125,9 +130,7 @@ function walletFromEnv() {
 
 async function assertChain(client) {
   const id = await client.getChainId();
-  if (id !== CHAIN_ID) {
-    throw new Error(`RPC chainId is ${id}; expected Arc Testnet ${CHAIN_ID} (${rpcUrl()})`);
-  }
+  checkChainId(id, NETWORK);
 }
 
 function parseFlags(argv) {
@@ -195,8 +198,8 @@ async function readMatch(client, matchId) {
     abi: arenaAbi,
     functionName: "matchCount",
   });
-  if (matchId >= count) {
-    throw new Error(`match ${matchId} does not exist (matchCount ${count})`);
+  if (!matchExists(matchId, count)) {
+    throw new Error(`match ${matchId} does not exist (ids are 1..${count}, matchCount ${count})`);
   }
   const match = await client.readContract({
     address: ARENA_ADDRESS,
