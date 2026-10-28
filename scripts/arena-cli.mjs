@@ -10,23 +10,35 @@ import { arcTestnet } from "viem/chains";
 import {
   ARENA_ADDRESS,
   CHAIN_ID,
+  DEFAULT_LEADERBOARD_BLOCKS,
+  DEFAULT_LEADERBOARD_LIMIT,
   DEFAULT_RPC_URL,
   EXPLORER_URL,
   EXPLORER_URL_ALT,
+  LEADERBOARD_LOG_SPAN,
+  MAX_LEADERBOARD_BLOCKS,
+  MAX_LEADERBOARD_LIMIT,
   SKILL_BADGE_ADDRESS,
   USDC_ADDRESS,
+  ZERO_ADDRESS,
   answerCommitment,
   arenaAbi,
   challengeDataFromAnswer,
   erc20Abi,
+  formatLeaderboard,
   formatMatch,
+  formatReputation,
   formatUsdc,
+  leaderboardRanges,
   matchCreatedId,
   mineNonce,
   parseChallengeType,
   parseUsdc,
+  rankAgents,
+  readSkillReputation,
   skillBadgeAbi,
-  summarizeTokenUri,
+  skillBadgeTransferEvent,
+  tallyMints,
   toBytes32,
 } from "./arena-lib.mjs";
 
@@ -60,6 +72,15 @@ Write commands need PRIVATE_KEY. RPC_URL overrides the default testnet RPC.
   npm run arena -- settle <matchId>
   npm run arena -- withdraw
   npm run arena -- badges [address] [--skill <tag>]
+  npm run arena -- reputation [address] [--skill <tag>]
+  npm run arena -- leaderboard [--blocks <n>] [--limit <n>]
+  npm run arena -- top [--blocks <n>] [--limit <n>]
+
+badges and reputation are the same SkillBadge read: win total (badgesOf
+length), countBySkill for each skill in tokenURI and for --skill, then a
+tokenURI summary per badge. leaderboard and top scan recent Transfer mints
+and rank agents by badgesOf length. Default lookback is ${DEFAULT_LEADERBOARD_BLOCKS} blocks.
+RPC only. AgentBadge is out of scope.
 
 create stakes <usdc> (human units, 6 decimals) for <seconds> and opens a
 POW_RACE match whose skillTag is the Solidity bytes32 of <skill>.
@@ -348,7 +369,31 @@ async function commandWithdraw(client) {
   await sendArena(client, wallet, "withdraw", []);
 }
 
-async function commandBadges(client, argv) {
+function parseBlockSpan(value) {
+  if (value === undefined) return DEFAULT_LEADERBOARD_BLOCKS;
+  if (!/^\d+$/.test(value) || value === "0") {
+    throw new Error(`--blocks must be an integer from 1 to ${MAX_LEADERBOARD_BLOCKS}`);
+  }
+  const span = BigInt(value);
+  if (span > MAX_LEADERBOARD_BLOCKS) {
+    throw new Error(`--blocks must be an integer from 1 to ${MAX_LEADERBOARD_BLOCKS}`);
+  }
+  return span;
+}
+
+function parseLimit(value) {
+  if (value === undefined) return DEFAULT_LEADERBOARD_LIMIT;
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`--limit must be an integer from 1 to ${MAX_LEADERBOARD_LIMIT}`);
+  }
+  const limit = Number(value);
+  if (limit < 1 || limit > MAX_LEADERBOARD_LIMIT) {
+    throw new Error(`--limit must be an integer from 1 to ${MAX_LEADERBOARD_LIMIT}`);
+  }
+  return limit;
+}
+
+async function commandBadges(client, argv, name = "badges") {
   await assertChain(client);
   const { positionals, flags } = parseFlags(argv);
   let address = positionals[0];
@@ -356,34 +401,58 @@ async function commandBadges(client, argv) {
     address = walletFromEnv().account.address;
   }
   if (!address || !isAddress(address)) {
-    throw new Error("usage: badges [address] [--skill <tag>]");
+    throw new Error(`usage: ${name} [address] [--skill <tag>]`);
   }
-  const ids = await client.readContract({
-    address: SKILL_BADGE_ADDRESS,
-    abi: skillBadgeAbi,
-    functionName: "badgesOf",
-    args: [address],
-  });
-  console.log(`${address}  ${ids.length} SkillBadge${ids.length === 1 ? "" : "s"}`);
-  if (flags.skill) {
-    const skillTag = toBytes32(flags.skill, "skill");
-    const count = await client.readContract({
+  const report = await readSkillReputation(client, address, flags.skill);
+  console.log(formatReputation(report));
+}
+
+async function commandLeaderboard(client, argv) {
+  await assertChain(client);
+  const { positionals, flags } = parseFlags(argv);
+  if (positionals.length > 0) {
+    throw new Error("usage: leaderboard [--blocks <n>] [--limit <n>]");
+  }
+  const blocks = parseBlockSpan(flags.blocks);
+  const limit = parseLimit(flags.limit);
+  const head = await client.getBlockNumber();
+  const plan = leaderboardRanges(head, blocks, LEADERBOARD_LOG_SPAN);
+  const logs = [];
+  for (const range of plan.ranges) {
+    const chunk = await client.getLogs({
+      address: SKILL_BADGE_ADDRESS,
+      event: skillBadgeTransferEvent,
+      args: { from: ZERO_ADDRESS },
+      fromBlock: range.fromBlock,
+      toBlock: range.toBlock,
+    });
+    logs.push(...chunk);
+  }
+  const tallied = tallyMints(
+    logs.map((log) => ({ to: log.args?.to, tokenId: log.args?.tokenId })),
+  );
+  const withWins = [];
+  for (const row of tallied) {
+    const ids = await client.readContract({
       address: SKILL_BADGE_ADDRESS,
       abi: skillBadgeAbi,
-      functionName: "countBySkill",
-      args: [address, skillTag],
+      functionName: "badgesOf",
+      args: [row.address],
     });
-    console.log(`countBySkill ${flags.skill} ${skillTag} = ${count}`);
+    withWins.push({ ...row, wins: ids.length });
   }
-  for (const id of ids) {
-    const uri = await client.readContract({
-      address: SKILL_BADGE_ADDRESS,
-      abi: skillBadgeAbi,
-      functionName: "tokenURI",
-      args: [id],
-    });
-    console.log(`#${id} ${summarizeTokenUri(uri)}`);
-  }
+  const ranked = rankAgents(withWins, limit);
+  console.log(
+    formatLeaderboard({
+      chainId: CHAIN_ID,
+      fromBlock: plan.start,
+      toBlock: plan.head,
+      blocks,
+      mintCount: tallied.reduce((sum, row) => sum + row.windowMints, 0),
+      discovered: tallied.length,
+      ranked,
+    }),
+  );
 }
 
 async function main() {
@@ -422,7 +491,14 @@ async function main() {
       await commandWithdraw(client);
       return;
     case "badges":
-      await commandBadges(client, rest);
+      await commandBadges(client, rest, "badges");
+      return;
+    case "reputation":
+      await commandBadges(client, rest, "reputation");
+      return;
+    case "leaderboard":
+    case "top":
+      await commandLeaderboard(client, rest);
       return;
     default:
       throw new Error(`unknown command ${command}\n\n${HELP}`);

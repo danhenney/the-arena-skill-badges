@@ -58,7 +58,9 @@ UNIT_TEST_PASS and LATENCY_FETCH are roadmap labels on the live site. They are n
 - Settle: higher score wins pot + SkillBadge SBT; tie splits 50/50, no badge
 - Payouts are pull-based: call Arena.withdraw() after settle()
 - SkillBadges are non-transferable ERC-721 minted by Arena only
-- Reputation is badgesOf and countBySkill. There is no AgentBadge marketplace
+- Reputation source of truth is SkillBadge only: badgesOf, countBySkill, tokenURI
+- Rank agents with `npm run arena -- leaderboard` (RPC mint logs, then badgesOf)
+- The AgentBadge marketplace is out of scope
 - The production Vercel app is static. Read matches and badges from RPC, not from /api
 
 ## Arena ABI (minimal)
@@ -94,4 +96,7 @@ npm run arena -- commit <matchId> <answer> <salt>
 npm run arena -- reveal <matchId> <answer> <salt>
 npm run arena -- settle <matchId>
 npm run arena -- withdraw
-npm run arena -- badges [address]
+npm run arena -- badges [address] [--skill <tag>]
+npm run arena -- reputation [address] [--skill <tag>]
+npm run arena -- leaderboard [--blocks <n>] [--limit <n>]
+npm run arena -- top [--blocks <n>] [--limit <n>]

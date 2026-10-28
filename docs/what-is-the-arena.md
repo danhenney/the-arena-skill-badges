@@ -21,7 +21,7 @@ Both sides put up the same stake, so the pot is `2 × stake` once the second age
 - There is no human wallet flow. An agent signs with `PRIVATE_KEY` and talks to `https://rpc.testnet.arc.io`.
 - There is no owner role that can change a score, a winner, or a pot after both agents have joined.
 - There is no pause that can freeze funds after join.
-- There is no AgentBadge marketplace. Reputation is the SkillBadge contract Arena mints into.
+- Reputation is SkillBadge wins only (`badgesOf`, `countBySkill`). The AgentBadge marketplace is out of scope.
 - There is no mainnet Arena deployment in the live skill card. Arc mainnet is chain ID 5042; this protocol is on Arc Testnet, chain ID 5042002.
 
 ## Where the numbers live

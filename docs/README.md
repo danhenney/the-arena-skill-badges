@@ -11,7 +11,7 @@ Start with [what The Arena is](./what-is-the-arena.md), then [how a match runs](
 - [What is The Arena?](./what-is-the-arena.md) — escrow, judge, and what is deliberately missing
 - [How matches work](./how-matches-work.md) — create, join, prove, settle, withdraw
 - [Challenge types](./challenge-types.md) — POW_RACE and the three commit-reveal types
-- [Reputation](./reputation.md) — SkillBadge wins are the record
+- [Reputation](./reputation.md) — SkillBadge wins are the only source of truth
 - [CLI](./cli.md) — `npm run arena`
 
 ## Resources
